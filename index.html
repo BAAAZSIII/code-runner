@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kód Futtató és Mentő</title>
+    <title>Kód Futtató, Mentő és Teljes Képernyő</title>
     <style>
         body { font-family: sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
         .container { display: flex; gap: 20px; }
@@ -18,7 +18,26 @@
         .save-item:hover { background: #ddd; }
         .delete-btn { background: #dc3545; color: white; border: none; padding: 3px 8px; border-radius: 3px; cursor: pointer; }
         .delete-btn:hover { background: #bd2130; }
-        #output { margin-top: 20px; border: 2px dashed #ccc; padding: 15px; background: #fff; min-height: 300px; border-radius: 8px; }
+        
+        /* Megjelenítési terület és gombok wrapperje */
+        .output-header { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+        #output-container { border: 2px dashed #ccc; background: #fff; border-radius: 8px; position: relative; width: 100%; height: 400px; }
+        #preview-iframe { width: 100%; height: 100%; border: none; border-radius: 6px; }
+
+        /* Teljes képernyős stílus, ha be van kapcsolva */
+        #output-container.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            border: none;
+            border-radius: 0;
+        }
+        /* Teljes képernyő gomb elhelyezése */
+        .fullscreen-btn { background: #6c757d; font-size: 14px; padding: 6px 12px; }
+        .fullscreen-btn.active { background: #dc3545; }
     </style>
 </head>
 <body>
@@ -47,34 +66,72 @@
         </div>
     </div>
 
-    <h3>Eredmény / Megjelenítés:</h3>
-    <div id="output"></div>
+    <!-- Eredmény fejléc gombbal -->
+    <div class="output-header">
+        <h3>Eredmény / Megjelenítés:</h3>
+        <button id="resizeBtn" class="fullscreen-btn" onclick="toggleFullscreen()" style="display: none;">🖥️ Teljes képernyő</button>
+    </div>
+    
+    <!-- Az ablak, amiben a kód fut és amit nagyítani lehet -->
+    <div id="output-container">
+        <iframe id="preview-iframe"></iframe>
+    </div>
 
     <script>
         const codeInput = document.getElementById('codeInput');
         const codeTitle = document.getElementById('codeTitle');
-        const output = document.getElementById('output');
+        const outputContainer = document.getElementById('output-container');
+        const previewIframe = document.getElementById('preview-iframe');
         const savesList = document.getElementById('savesList');
+        const resizeBtn = document.getElementById('resizeBtn');
 
-        // 1. Futtatás ENTER leütésére a szövegdobozban (ha nem a Shift+Enter-t nyomod)
+        // 1. Futtatás ENTER leütésére
         codeInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // Megakadályozza az új sort
+                e.preventDefault();
                 runCode();
             }
         });
 
-        // kód futtatása funkció
+        // Kód futtatása funkció
         function runCode() {
             const code = codeInput.value;
-            // Biztonságos futtatás egy iframe-en belül, hogy ne rontsa el a fő oldalt
-            output.innerHTML = `<iframe id="preview" style="width:100%; height:400px; border:none;"></iframe>`;
-            const iframe = document.getElementById('preview');
-            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            if(!code.trim()) return;
+
+            const doc = previewIframe.contentDocument || previewIframe.contentWindow.document;
             doc.open();
             doc.write(code);
             doc.close();
+
+            // Ha van futó kód, megjelenítjük a nagyítás gombot
+            resizeBtn.style.display = 'block';
         }
+
+        // Kinyitás és összecsukás funkció (Teljes képernyő)
+        function toggleFullscreen() {
+            outputContainer.classList.toggle('fullscreen');
+            
+            if (outputContainer.classList.contains('fullscreen')) {
+                resizeBtn.innerHTML = '❌ Kicsinyítés (Bezárás)';
+                resizeBtn.classList.add('active');
+                // Áttesszük a gombot ideiglenesen a teljes képernyős ablakba, hogy ott is látszódjon felül
+                resizeBtn.style.position = 'fixed';
+                resizeBtn.style.top = '10px';
+                resizeBtn.style.right = '10px';
+                resizeBtn.style.zIndex = '10000';
+            } else {
+                resizeBtn.innerHTML = '🖥️ Teljes képernyő';
+                resizeBtn.classList.remove('active');
+                resizeBtn.style.position = 'static';
+            }
+        }
+
+        // ESC billentyű figyelése a kicsinyítéshez
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && outputContainer.classList.contains('fullscreen')) {
+                toggleFullscreen();
+            }
+        });
 
         // Kód mentése LocalStorage-ba
         function saveCode() {
@@ -107,8 +164,6 @@
             for (let title in saves) {
                 const div = document.createElement('div');
                 div.className = 'save-item';
-                
-                // Kattintásra betölti a kódot a mezőbe
                 div.innerHTML = `
                     <span onclick="loadCode('${title}')" style="flex:1; font-weight:bold;">${title}</span>
                     <button class="delete-btn" onclick="deleteCode(event, '${title}')">X</button>
@@ -117,7 +172,7 @@
             }
         }
 
-        // Egy mentés betöltése a szövegdobozba
+        // Egy mentés betöltése
         function loadCode(title) {
             let saves = JSON.parse(localStorage.getItem('html_saves')) || {};
             if (saves[title]) {
@@ -128,7 +183,7 @@
 
         // Mentés törlése
         function deleteCode(event, title) {
-            event.stopPropagation(); // Megakadályozza, hogy a törlés gomb megnyomásakor be is töltődjön
+            event.stopPropagation();
             if (confirm(`Biztosan törlöd a(z) "${title}" mentést?`)) {
                 let saves = JSON.parse(localStorage.getItem('html_saves')) || {};
                 delete saves[title];
@@ -137,7 +192,6 @@
             }
         }
 
-        // Oldal betöltésekor listázza a mentéseket
         loadSavesList();
     </script>
 </body>
